@@ -1,4 +1,6 @@
 test_files/
+packages/
+.github/
 tests/files/
 demos/
 index.html

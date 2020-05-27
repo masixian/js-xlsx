@@ -1,9 +1,10 @@
 var XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
 var attregexg=/([^"\s?>\/]+)\s*=\s*((?:")([^"]*)(?:")|(?:')([^']*)(?:')|([^'">\s]+))/g;
-var tagregex=/<[\/\?]?[a-zA-Z0-9:]+(?:\s+[^"\s?>\/]+\s*=\s*(?:"[^"]*"|'[^']*'|[^'">\s=]+))*\s?[\/\?]?>/g;
+var tagregex=/<[\/\?]?[a-zA-Z0-9:_-]+(?:\s+[^"\s?>\/]+\s*=\s*(?:"[^"]*"|'[^']*'|[^'">\s=]+))*\s?[\/\?]?>/g;
+
 if(!(XML_HEADER.match(tagregex))) tagregex = /<[^>]*>/g;
 var nsregex=/<\w*:/, nsregex2 = /<(\/?)\w+:/;
-function parsexmltag(tag/*:string*/, skip_root/*:?boolean*/)/*:any*/ {
+function parsexmltag(tag/*:string*/, skip_root/*:?boolean*/, skip_LC/*:?boolean*/)/*:any*/ {
 	var z = ({}/*:any*/);
 	var eq = 0, c = 0;
 	for(; eq !== tag.length; ++eq) if((c = tag.charCodeAt(eq)) === 32 || c === 10 || c === 13) break;
@@ -21,13 +22,13 @@ function parsexmltag(tag/*:string*/, skip_root/*:?boolean*/)/*:any*/ {
 		if(j===q.length) {
 			if(q.indexOf("_") > 0) q = q.slice(0, q.indexOf("_")); // from ods
 			z[q] = v;
-			z[q.toLowerCase()] = v;
+			if(!skip_LC) z[q.toLowerCase()] = v;
 		}
 		else {
 			var k = (j===5 && q.slice(0,5)==="xmlns"?"xmlns":"")+q.slice(j+1);
 			if(z[k] && q.slice(j-3,j) == "ext") continue; // from ods
 			z[k] = v;
-			z[k.toLowerCase()] = v;
+			if(!skip_LC) z[k.toLowerCase()] = v;
 		}
 	}
 	return z;
@@ -47,7 +48,7 @@ var rencoding = evert(encodings);
 // TODO: CP remap (need to read file version to determine OS)
 var unescapexml/*:StringConv*/ = (function() {
 	/* 22.4.2.4 bstr (Basic String) */
-	var encregex = /&(?:quot|apos|gt|lt|amp|#x?([\da-fA-F]+));/g, coderegex = /_x([\da-fA-F]{4})_/g;
+	var encregex = /&(?:quot|apos|gt|lt|amp|#x?([\da-fA-F]+));/ig, coderegex = /_x([\da-fA-F]{4})_/ig;
 	return function unescapexml(text/*:string*/)/*:string*/ {
 		var s = text + '', i = s.indexOf("<![CDATA[");
 		if(i == -1) return s.replace(encregex, function($$, $1) { return encodings[$$]||String.fromCharCode(parseInt($1,$$.indexOf("x")>-1?16:10))||$$; }).replace(coderegex,function(m,c) {return String.fromCharCode(parseInt(c,16));});
@@ -154,11 +155,9 @@ if(has_buf) {
 	};
 	var corpus = "foo bar baz\u00e2\u0098\u0083\u00f0\u009f\u008d\u00a3";
 	if(utf8read(corpus) == utf8readb(corpus)) utf8read = utf8readb;
-	// $FlowIgnore
 	var utf8readc = function utf8readc(data) { return Buffer_from(data, 'binary').toString('utf8'); };
 	if(utf8read(corpus) == utf8readc(corpus)) utf8read = utf8readc;
 
-	// $FlowIgnore
 	utf8write = function(data) { return Buffer_from(data, 'utf8').toString("binary"); };
 }
 
@@ -176,9 +175,21 @@ var htmldecode/*:{(s:string):string}*/ = (function() {
 	var entities/*:Array<[RegExp, string]>*/ = [
 		['nbsp', ' '], ['middot', '·'],
 		['quot', '"'], ['apos', "'"], ['gt',   '>'], ['lt',   '<'], ['amp',  '&']
-	].map(function(x/*:[string, string]*/) { return [new RegExp('&' + x[0] + ';', "g"), x[1]]; });
+	].map(function(x/*:[string, string]*/) { return [new RegExp('&' + x[0] + ';', "ig"), x[1]]; });
 	return function htmldecode(str/*:string*/)/*:string*/ {
-		var o = str.replace(/^[\t\n\r ]+/, "").replace(/[\t\n\r ]+$/,"").replace(/[\t\n\r ]+/g, " ").replace(/<\s*[bB][rR]\s*\/?>/g,"\n").replace(/<[^>]*>/g,"");
+		var o = str
+				// Remove new lines and spaces from start of content
+				.replace(/^[\t\n\r ]+/, "")
+				// Remove new lines and spaces from end of content
+				.replace(/[\t\n\r ]+$/,"")
+				// Added line which removes any white space characters after and before html tags
+				.replace(/>\s+/g,">").replace(/\s+</g,"<")
+				// Replace remaining new lines and spaces with space
+				.replace(/[\t\n\r ]+/g, " ")
+				// Replace <br> tags with new lines
+				.replace(/<\s*[bB][rR]\s*\/?>/g,"\n")
+				// Strip HTML elements
+				.replace(/<[^>]*>/g,"");
 		for(var i = 0; i < entities.length; ++i) o = o.replace(entities[i][0], entities[i][1]);
 		return o;
 	};
@@ -214,10 +225,13 @@ function writextag(f/*:string*/,g/*:?string*/,h) { return '<' + f + ((h != null)
 
 function write_w3cdtf(d/*:Date*/, t/*:?boolean*/)/*:string*/ { try { return d.toISOString().replace(/\.\d*/,""); } catch(e) { if(t) throw e; } return ""; }
 
-function write_vt(s)/*:string*/ {
+function write_vt(s, xlsx/*:?boolean*/)/*:string*/ {
 	switch(typeof s) {
-		case 'string': return writextag('vt:lpwstr', s);
-		case 'number': return writextag((s|0)==s?'vt:i4':'vt:r8', String(s));
+		case 'string':
+			var o = writextag('vt:lpwstr', escapexml(s));
+			if(xlsx) o = o.replace(/&quot;/g, "_x0022_");
+			return o;
+		case 'number': return writextag((s|0)==s?'vt:i4':'vt:r8', escapexml(String(s)));
 		case 'boolean': return writextag('vt:bool',s?'true':'false');
 	}
 	if(s instanceof Date) return writextag('vt:filetime', write_w3cdtf(s));

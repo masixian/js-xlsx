@@ -25,7 +25,6 @@ function new_unsafe_buf(len/*:number*/) {
 }
 
 var s2a = function s2a(s/*:string*/)/*:any*/ {
-	// $FlowIgnore
 	if(has_buf) return Buffer_from(s, "binary");
 	return s.split("").map(function(x/*:string*/)/*:number*/{ return x.charCodeAt(0) & 0xff; });
 };
@@ -38,8 +37,8 @@ function s2ab(s/*:string*/)/*:any*/ {
 }
 
 function a2s(data/*:any*/)/*:string*/ {
-	if(Array.isArray(data)) return data.map(_chr).join("");
-	var o/*:Array<string>*/ = []; for(var i = 0; i < data.length; ++i) o[i] = _chr(data[i]); return o.join("");
+	if(Array.isArray(data)) return data.map(function(c) { return String.fromCharCode(c); }).join("");
+	var o/*:Array<string>*/ = []; for(var i = 0; i < data.length; ++i) o[i] = String.fromCharCode(data[i]); return o.join("");
 }
 
 function a2u(data/*:Array<number>*/)/*:Uint8Array*/ {

@@ -4,6 +4,7 @@ var HTML_ = (function() {
 		var opts = _opts || {};
 		if(DENSE != null && opts.dense == null) opts.dense = DENSE;
 		var ws/*:Worksheet*/ = opts.dense ? ([]/*:any*/) : ({}/*:any*/);
+		str = str.replace(/<!--.*?-->/g, "");
 		var mtch/*:any*/ = str.match(/<table/i);
 		if(!mtch) throw new Error("Invalid HTML: could not find <table>");
 		var mtch2/*:any*/ = str.match(/<\/table/i);
@@ -24,6 +25,10 @@ var HTML_ = (function() {
 				var m = cell, cc = 0;
 				/* TODO: parse styles etc */
 				while(m.charAt(0) == "<" && (cc = m.indexOf(">")) > -1) m = m.slice(cc+1);
+				for(var midx = 0; midx < merges.length; ++midx) {
+					var _merge/*:Range*/ = merges[midx];
+					if(_merge.s.c == C && _merge.s.r < R && R <= _merge.e.r) { C = _merge.e.c + 1; midx = -1; }
+				}
 				var tag = parsexmltag(cell.slice(0, cell.indexOf(">")));
 				CS = tag.colspan ? +tag.colspan : 1;
 				if((RS = +tag.rowspan)>1 || CS>1) merges.push({s:{r:R,c:C},e:{r:R + (RS||1) - 1, c:C + CS - 1}});
@@ -50,6 +55,7 @@ var HTML_ = (function() {
 			}
 		}
 		ws['!ref'] = encode_range(range);
+		if(merges.length) ws["!merges"] = merges;
 		return ws;
 	}
 	function html_to_book(str/*:string*/, opts)/*:Workbook*/ {
@@ -69,14 +75,15 @@ var HTML_ = (function() {
 			if(RS < 0) continue;
 			var coord = encode_cell({r:R,c:C});
 			var cell = o.dense ? (ws[R]||[])[C] : ws[coord];
-			var sp = {};
-			if(RS > 1) sp.rowspan = RS;
-			if(CS > 1) sp.colspan = CS;
 			/* TODO: html entities */
 			var w = (cell && cell.v != null) && (cell.h || escapehtml(cell.w || (format_cell(cell), cell.w) || "")) || "";
+			var sp = ({}/*:any*/);
+			if(RS > 1) sp.rowspan = RS;
+			if(CS > 1) sp.colspan = CS;
 			sp.t = cell && cell.t || 'z';
 			if(o.editable) w = '<span contenteditable="true">' + w + '</span>';
-			sp.id = "sjs-" + coord;
+			sp.id = (o.id || "sjs") + "-" + coord;
+			if(sp.t != "z") { sp.v = cell.v; if(cell.z != null) sp.z = cell.z; }
 			oo.push(writextag('td', w, sp));
 		}
 		var preamble = "<tr>";
@@ -99,8 +106,8 @@ var HTML_ = (function() {
 		for(var R = r.s.r; R <= r.e.r; ++R) out.push(make_html_row(ws, r, R, o));
 		out.push("</table>" + footer);
 		return out.join("");
-	}
 
+	}
 	return {
 		to_workbook: html_to_book,
 		to_sheet: html_to_sheet,
@@ -121,7 +128,7 @@ function parse_dom_table(table/*:HTMLElement*/, _opts/*:?any*/)/*:Worksheet*/ {
 	var range/*:Range*/ = {s:{r:0,c:0},e:{r:0,c:0}};
 	var merges/*:Array<Range>*/ = [], midx = 0;
 	var rowinfo/*:Array<RowInfo>*/ = [];
-	var _R = 0, R = 0, _C, C, RS, CS;
+	var _R = 0, R = 0, _C = 0, C = 0, RS = 0, CS = 0;
 	for(; _R < rows.length && R < sheetRows; ++_R) {
 		var row/*:HTMLTableRowElement*/ = rows[_R];
 		if (is_dom_element_hidden(row)) {
@@ -132,7 +139,8 @@ function parse_dom_table(table/*:HTMLElement*/, _opts/*:?any*/)/*:Worksheet*/ {
 		for(_C = C = 0; _C < elts.length; ++_C) {
 			var elt/*:HTMLTableCellElement*/ = elts[_C];
 			if (opts.display && is_dom_element_hidden(elt)) continue;
-			var v/*:string*/ = htmldecode(elt.innerHTML);
+			var v/*:?string*/ = elt.hasAttribute('v') ? elt.getAttribute('v') : htmldecode(elt.innerHTML);
+			var z/*:?string*/ = elt.getAttribute('z');
 			for(midx = 0; midx < merges.length; ++midx) {
 				var m/*:Range*/ = merges[midx];
 				if(m.s.c == C && m.s.r <= R && R <= m.e.r) { C = m.e.c+1; midx = -1; }
@@ -154,7 +162,8 @@ function parse_dom_table(table/*:HTMLElement*/, _opts/*:?any*/)/*:Worksheet*/ {
 					o.z = opts.dateNF || SSF._table[14];
 				}
 			}
-			if(opts.dense) { if(!ws[R]) ws[R] = []; ws[R][C] = o; }
+			if(o.z === undefined && z != null) o.z = z;
+			if(opts.dense) { if(!ws[R]) ws[R] = []; ws[R][C] = o;}
 			else ws[encode_cell({c:C, r:R})] = o;
 			if(range.e.c < C) range.e.c = C;
 			C += CS;

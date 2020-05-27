@@ -6,7 +6,7 @@ type MJRObject = {
 */
 function make_json_row(sheet/*:Worksheet*/, r/*:Range*/, R/*:number*/, cols/*:Array<string>*/, header/*:number*/, hdr/*:Array<any>*/, dense/*:boolean*/, o/*:Sheet2JSONOpts*/)/*:MJRObject*/ {
 	var rr = encode_row(R);
-	var defval = o.defval, raw = o.raw || !o.hasOwnProperty("raw");
+	var defval = o.defval, raw = o.raw || !Object.prototype.hasOwnProperty.call(o, "raw");
 	var isempty = true;
 	var row/*:any*/ = (header === 1) ? [] : {};
 	if(header !== 1) {
@@ -51,6 +51,7 @@ function sheet_to_json(sheet/*:Worksheet*/, opts/*:?Sheet2JSONOpts*/) {
 	if(o.header === 1) header = 1;
 	else if(o.header === "A") header = 2;
 	else if(Array.isArray(o.header)) header = 3;
+	else if(o.header == null) header = 0;
 	switch(typeof range) {
 		case 'string': r = safe_decode_range(range); break;
 		case 'number': r = safe_decode_range(sheet["!ref"]); r.s.r = range; break;
@@ -195,7 +196,7 @@ function sheet_add_json(_ws/*:?Worksheet*/, js/*:Array<any>*/, opts)/*:Worksheet
 		var _range = safe_decode_range(ws['!ref']);
 		range.e.c = Math.max(range.e.c, _range.e.c);
 		range.e.r = Math.max(range.e.r, _range.e.r);
-		if(_R == -1) { _R = range.e.r + 1; range.e.r = _R + js.length - 1 + offset; }
+		if(_R == -1) { _R = _range.e.r + 1; range.e.r = _R + js.length - 1 + offset; }
 	}
 	var hdr/*:Array<string>*/ = o.header || [], C = 0;
 
@@ -205,8 +206,10 @@ function sheet_add_json(_ws/*:?Worksheet*/, js/*:Array<any>*/, opts)/*:Worksheet
 			var v = JS[k];
 			var t = 'z';
 			var z = "";
+			var ref = encode_cell({c:_C + C,r:_R + R + offset});
+			cell = utils.sheet_get_cell(ws, ref);
 			if(v && typeof v === 'object' && !(v instanceof Date)){
-				ws[encode_cell({c:_C + C,r:_R + R + offset})] = v;
+				ws[ref] = v;
 			} else {
 				if(typeof v == 'number') t = 'n';
 				else if(typeof v == 'boolean') t = 'b';
@@ -214,9 +217,14 @@ function sheet_add_json(_ws/*:?Worksheet*/, js/*:Array<any>*/, opts)/*:Worksheet
 				else if(v instanceof Date) {
 					t = 'd';
 					if(!o.cellDates) { t = 'n'; v = datenum(v); }
-					z = o.dateNF || SSF._table[14];
+					z = (o.dateNF || SSF._table[14]);
 				}
-				ws[encode_cell({c:_C + C,r:_R + R + offset})] = cell = ({t:t, v:v}/*:any*/);
+				if(!cell) ws[ref] = cell = ({t:t, v:v}/*:any*/);
+				else {
+					cell.t = t; cell.v = v;
+					delete cell.w; delete cell.R;
+					if(z) cell.z = z;
+				}
 				if(z) cell.z = z;
 			}
 		});
@@ -254,9 +262,6 @@ var utils/*:any*/ = {
 	sheet_to_txt: sheet_to_txt,
 	sheet_to_json: sheet_to_json,
 	sheet_to_html: HTML_.from_sheet,
-	sheet_to_dif: DIF.from_sheet,
-	sheet_to_slk: SYLK.from_sheet,
-	sheet_to_eth: ETH.from_sheet,
 	sheet_to_formulae: sheet_to_formulae,
 	sheet_to_row_object_array: sheet_to_json
 };

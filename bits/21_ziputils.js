@@ -4,6 +4,7 @@ function getdatastr(data)/*:?string*/ {
 	if(data.asNodeBuffer && has_buf) return debom(data.asNodeBuffer().toString('binary'));
 	if(data.asBinary) return debom(data.asBinary());
 	if(data._data && data._data.getContent) return debom(cc2str(Array.prototype.slice.call(data._data.getContent(),0)));
+	if(data.content && data.type) return debom(cc2str(data.content));
 	return null;
 }
 
@@ -16,6 +17,7 @@ function getdatabin(data) {
 		if(typeof o == "string") return char_codes(o);
 		return Array.prototype.slice.call(o);
 	}
+	if(data.content && data.type) return data.content;
 	return null;
 }
 
@@ -24,7 +26,7 @@ function getdata(data) { return (data && data.name.slice(-4) === ".bin") ? getda
 /* Part 2 Section 10.1.2 "Mapping Content Types" Names are case-insensitive */
 /* OASIS does not comment on filename case sensitivity */
 function safegetzipfile(zip, file/*:string*/) {
-	var k = keys(zip.files);
+	var k = zip.FullPaths || keys(zip.files);
 	var f = file.toLowerCase(), g = f.replace(/\//g,'\\');
 	for(var i=0; i<k.length; ++i) {
 		var n = k[i].toLowerCase();
@@ -52,9 +54,14 @@ function getzipstr(zip, file/*:string*/, safe/*:?boolean*/)/*:?string*/ {
 }
 
 function zipentries(zip) {
-	var k = keys(zip.files), o = [];
+	var k = zip.FullPaths || keys(zip.files), o = [];
 	for(var i = 0; i < k.length; ++i) if(k[i].slice(-1) != '/') o.push(k[i]);
 	return o.sort();
+}
+
+function zip_add_file(zip, path, content) {
+	if(zip.FullPaths) CFB.utils.cfb_add(zip, path, content);
+	else zip.file(path, content);
 }
 
 var jszip;
@@ -67,7 +74,30 @@ if(typeof exports !== 'undefined') {
 	}
 }
 
+function zip_new() {
+	if(!jszip) return CFB.utils.cfb_new();
+	return new jszip();
+}
+
+function zip_read(d, o) {
+	var zip;
+	if(jszip) switch(o.type) {
+		case "base64": zip = new jszip(d, { base64:true }); break;
+		case "binary": case "array": zip = new jszip(d, { base64:false }); break;
+		case "buffer": zip = new jszip(d); break;
+		default: throw new Error("Unrecognized type " + o.type);
+	}
+	else switch(o.type) {
+		case "base64": zip = CFB.read(d, { type: "base64" }); break;
+		case "binary": zip = CFB.read(d, { type: "binary" }); break;
+		case "buffer": case "array": zip = CFB.read(d, { type: "buffer" }); break;
+		default: throw new Error("Unrecognized type " + o.type);
+	}
+	return zip;
+}
+
 function resolve_path(path/*:string*/, base/*:string*/)/*:string*/ {
+	if(path.charAt(0) == "/") return path.slice(1);
 	var result = base.split('/');
 	if(base.slice(-1) != "/") result.pop(); // folder path
 	var target = path.split('/');

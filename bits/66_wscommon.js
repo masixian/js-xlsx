@@ -12,7 +12,7 @@ var browser_has_Map = typeof Map !== 'undefined';
 function get_sst_id(sst/*:SST*/, str/*:string*/, rev)/*:number*/ {
 	var i = 0, len = sst.length;
 	if(rev) {
-		if(browser_has_Map ? rev.has(str) : rev.hasOwnProperty(str)) {
+		if(browser_has_Map ? rev.has(str) : Object.prototype.hasOwnProperty.call(rev, str)) {
 			var revarr = browser_has_Map ? rev.get(str) : rev[str];
 			for(; i < revarr.length; ++i) {
 				if(sst[revarr[i]].t === str) { sst.Count ++; return revarr[i]; }
@@ -27,7 +27,7 @@ function get_sst_id(sst/*:SST*/, str/*:string*/, rev)/*:number*/ {
 			if(!rev.has(str)) rev.set(str, []);
 			rev.get(str).push(len);
 		} else {
-			if(!rev.hasOwnProperty(str)) rev[str] = [];
+			if(!Object.prototype.hasOwnProperty.call(rev, str)) rev[str] = [];
 			rev[str].push(len);
 		}
 	}
@@ -85,11 +85,11 @@ function get_cell_style(styles/*:Array<any>*/, cell/*:Cell*/, opts) {
 }
 
 function safe_format(p/*:Cell*/, fmtid/*:number*/, fillid/*:?number*/, opts, themes, styles) {
-	if(p.t === 'z') return;
-	if(p.t === 'd' && typeof p.v === 'string') p.v = parseDate(p.v);
 	try {
 		if(opts.cellNF) p.z = SSF._table[fmtid];
 	} catch(e) { if(opts.WTF) throw e; }
+	if(p.t === 'z') return;
+	if(p.t === 'd' && typeof p.v === 'string') p.v = parseDate(p.v);
 	if(!opts || opts.cellText !== false) try {
 		if(SSF._table[fmtid] == null) SSF.load(SSFImplicit[fmtid] || "General", fmtid);
 		if(p.t === 'e') p.w = p.w || BErr[p.v];

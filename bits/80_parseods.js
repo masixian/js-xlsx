@@ -186,6 +186,7 @@ var parse_content_xml = (function() {
 					if(atag.Target) q.l = atag;
 					if(comments.length > 0) { q.c = comments; comments = []; }
 					if(textp && opts.cellText !== false) q.w = textp;
+					if(isstub) { q.t = "z"; delete q.v; }
 					if(!isstub || opts.sheetStubs) {
 						if(!(opts.sheetRows && opts.sheetRows <= R)) {
 							for(var rpt = 0; rpt < rowpeat; ++rpt) {
@@ -225,7 +226,7 @@ var parse_content_xml = (function() {
 				if(Rn[1]==='/'){
 					if((tmp=state.pop())[0]!==Rn[3]) throw "Bad state: "+tmp;
 					comment.t = textp;
-					if(textR.length) comment.R = textR;
+					if(textR.length) /*::(*/comment/*:: :any)*/.R = textR;
 					comment.a = creator;
 					comments.push(comment);
 				}
@@ -544,7 +545,7 @@ var parse_content_xml = (function() {
 			SheetNames: SheetNames,
 			Workbook: WB
 		}/*:any*/);
-		if(opts.bookSheets) delete out.Sheets;
+		if(opts.bookSheets) delete /*::(*/out/*:: :any)*/.Sheets;
 		return out;
 	};
 })();

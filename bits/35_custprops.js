@@ -11,7 +11,7 @@ function parse_cust_props(data/*:string*/, opts) {
 		switch(y[0]) {
 			case '<?xml': break;
 			case '<Properties': break;
-			case '<property': name = y.name; break;
+			case '<property': name = unescapexml(y.name); break;
 			case '</property>': name = null; break;
 			default: if (x.indexOf('<vt:') === 0) {
 				var toks = x.split('>');
@@ -57,10 +57,10 @@ function write_cust_props(cp/*::, opts*/)/*:string*/ {
 	if(!cp) return o.join("");
 	var pid = 1;
 	keys(cp).forEach(function custprop(k) { ++pid;
-		o[o.length] = (writextag('property', write_vt(cp[k]), {
+		o[o.length] = (writextag('property', write_vt(cp[k], true), {
 			'fmtid': '{D5CDD505-2E9C-101B-9397-08002B2CF9AE}',
 			'pid': pid,
-			'name': k
+			'name': escapexml(k)
 		}));
 	});
 	if(o.length>2){ o[o.length] = '</Properties>'; o[1]=o[1].replace("/>",">"); }

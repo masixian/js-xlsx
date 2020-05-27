@@ -349,7 +349,7 @@ function write_Window1(/*::opts*/) {
 }
 /* [MS-XLS] 2.4.346 TODO */
 function parse_Window2(blob, length, opts) {
-	if(opts && opts.biff >= 2 && opts.biff < 8) return {};
+	if(opts && opts.biff >= 2 && opts.biff < 5) return {};
 	var f = blob.read_shift(2);
 	return { RTL: f & 0x40 };
 }
@@ -362,6 +362,10 @@ function write_Window2(view) {
 	o.write_shift(4, 0);
 	o.write_shift(4, 0);
 	return o;
+}
+
+/* [MS-XLS] 2.4.189 TODO */
+function parse_Pane(/*blob, length, opts*/) {
 }
 
 /* [MS-XLS] 2.4.122 TODO */
@@ -943,7 +947,9 @@ function parse_ColInfo(blob, length, opts) {
 	var ixfe = blob.read_shift(w);
 	var flags = blob.read_shift(2);
 	if(w == 2) blob.l += 2;
-	return {s:colFirst, e:colLast, w:coldx, ixfe:ixfe, flags:flags};
+	var o = ({s:colFirst, e:colLast, w:coldx, ixfe:ixfe, flags:flags}/*:any*/);
+	if(opts.biff >= 5 || !opts.biff) o.level = (flags >> 8) & 0x7;
+	return o;
 }
 
 /* [MS-XLS] 2.4.257 */
